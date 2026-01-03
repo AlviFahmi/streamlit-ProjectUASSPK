@@ -2,6 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+try:
+    df = pd.read_csv(uploaded_file, encoding="utf-8")
+except UnicodeDecodeError:
+    df = pd.read_csv(uploaded_file, encoding="latin1")
+
+
 st.set_page_config(page_title="SPK Penilaian Kinerja Atasan", layout="wide")
 
 st.title("📊 Sistem Pendukung Keputusan Penilaian Kinerja Atasan")
@@ -103,3 +109,4 @@ if uploaded_file:
 
 else:
     st.info("Silakan upload file CSV untuk memulai.")
+
