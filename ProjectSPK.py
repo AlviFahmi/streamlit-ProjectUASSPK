@@ -2,14 +2,20 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+# ======================
+# Konfigurasi Halaman
+# ======================
 st.set_page_config(
     page_title="SPK Penilaian Kinerja Atasan",
     layout="wide"
 )
 
 st.title("📊 Sistem Pendukung Keputusan Penilaian Kinerja Atasan")
-st.markdown("**Metode: SAW & Copeland Score (Hybrid)**")
+st.markdown("**Metode: Simple Additive Weighting (SAW) & Copeland Score (Hybrid)**")
 
+# ======================
+# Upload Dataset
+# ======================
 uploaded_file = st.file_uploader(
     "📂 Upload Dataset Penilaian (CSV)",
     type=["csv"]
@@ -19,14 +25,14 @@ if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     df.columns = df.columns.str.strip()
 
-    # Mapping nama kolom 
+    # Mapping kolom jika masih C1–C5
     df = df.rename(columns={
-    "C1": "Kepemimpinan",
-    "C2": "Komunikasi",
-    "C3": "Kerjasama",
-    "C4": "Sikap Profesional",
-    "C5": "Arah & Pengambilan Keputusan"
-})
+        "C1": "Kepemimpinan",
+        "C2": "Komunikasi",
+        "C3": "Kerjasama",
+        "C4": "Sikap Profesional",
+        "C5": "Arah & Pengambilan Keputusan"
+    })
 
     st.subheader("📋 Tabel Keputusan")
     st.dataframe(df, use_container_width=True)
@@ -35,13 +41,15 @@ if uploaded_file is not None:
     # Alternatif & Kriteria
     # ======================
     alternatif = df["Atasan"]
+
     kriteria = [
-    "Kepemimpinan",
-    "Komunikasi",
-    "Kerjasama",
-    "Sikap Profesional",
-    "Arah & Pengambilan Keputusan"
-]
+        "Kepemimpinan",
+        "Komunikasi",
+        "Kerjasama",
+        "Sikap Profesional",
+        "Arah & Pengambilan Keputusan"
+    ]
+
     # Paksa numerik
     for c in kriteria:
         df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -59,6 +67,7 @@ if uploaded_file is not None:
         "Kriteria": kriteria,
         "Bobot": bobot_list
     })
+
     st.table(bobot_df)
 
     if round(sum(bobot_list), 2) != 1:
@@ -129,8 +138,56 @@ if uploaded_file is not None:
         ascending=False
     ).reset_index(drop=True)
 
+    # ======================
+    # Ranking & Kategori
+    # ======================
+    def kategori_kinerja(rank):
+        if rank == 1:
+            return "Sangat Baik"
+        elif rank == 2:
+            return "Baik"
+        elif rank == 3:
+            return "Cukup"
+        else:
+            return "Perlu Evaluasi"
+
+    copeland_df["Ranking"] = range(1, len(copeland_df) + 1)
+    copeland_df["Kategori Kinerja"] = copeland_df["Ranking"].apply(kategori_kinerja)
+
     st.dataframe(copeland_df, use_container_width=True)
 
+    # ======================
+    # Dashboard Ringkas
+    # ======================
+    st.subheader("📌 Ringkasan Hasil Keputusan")
+
+    ranking_1 = copeland_df.iloc[0]
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("🏆 Atasan Terbaik", ranking_1["Atasan"], "Ranking 1")
+    col2.metric("⭐ Copeland Score Tertinggi", ranking_1["Copeland Score"])
+    col3.metric("📊 Jumlah Alternatif", len(copeland_df))
+
+    # ======================
+    # Narasi Otomatis
+    # ======================
+    st.subheader("📝 Interpretasi Hasil")
+
+    st.write(
+        f"""
+        Berdasarkan hasil perhitungan menggunakan metode **Hybrid SAW–Copeland Score**,
+        diperoleh bahwa **{ranking_1['Atasan']}** menempati **peringkat pertama**
+        dengan kategori kinerja **Sangat Baik**.
+
+        Hal ini menunjukkan bahwa alternatif tersebut memiliki nilai preferensi
+        tertinggi serta unggul dalam perbandingan berpasangan dibandingkan alternatif lainnya.
+        """
+    )
+
+    # ======================
+    # Grafik
+    # ======================
     st.subheader("📈 Grafik Ranking Copeland Score")
     st.bar_chart(copeland_df.set_index("Atasan")["Copeland Score"])
 
