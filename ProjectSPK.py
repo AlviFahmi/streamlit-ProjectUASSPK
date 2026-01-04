@@ -2,87 +2,114 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-try:
-    df = pd.read_csv(uploaded_file, encoding="utf-8")
-except UnicodeDecodeError:
-    df = pd.read_csv(uploaded_file, encoding="latin1")
-
-
-st.set_page_config(page_title="SPK Penilaian Kinerja Atasan", layout="wide")
+st.set_page_config(
+    page_title="SPK Penilaian Kinerja Atasan",
+    layout="wide"
+)
 
 st.title("📊 Sistem Pendukung Keputusan Penilaian Kinerja Atasan")
-st.write("Metode: **SAW & Copeland Score (Hybrid)**")
+st.markdown("**Metode: SAW & Copeland Score (Hybrid)**")
 
-# ======================
-# Upload Dataset
-# ======================
-uploaded_file = st.file_uploader("Upload Dataset Penilaian (CSV)", type=["csv"])
+uploaded_file = st.file_uploader(
+    "📂 Upload Dataset Penilaian (CSV)",
+    type=["csv"]
+)
 
-if uploaded_file:
+if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    st.subheader("📋 Tabel Keputusan")
-    st.dataframe(df)
+    df.columns = df.columns.str.strip()
 
+    # Mapping nama kolom 
+    df = df.rename(columns={
+    "C1": "Kepemimpinan",
+    "C2": "Komunikasi",
+    "C3": "Kerjasama",
+    "C4": "Sikap Profesional",
+    "C5": "Arah & Pengambilan Keputusan"
+})
+
+    st.subheader("📋 Tabel Keputusan")
+    st.dataframe(df, use_container_width=True)
+
+    # ======================
+    # Alternatif & Kriteria
+    # ======================
     alternatif = df["Atasan"]
-    kriteria = df.columns[1:]
+    kriteria = [
+    "Kepemimpinan",
+    "Komunikasi",
+    "Kerjasama",
+    "Sikap Profesional",
+    "Arah & Pengambilan Keputusan"
+]
+    # Paksa numerik
+    for c in kriteria:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df[kriteria] = df[kriteria].fillna(0)
 
     # ======================
     # Bobot Kriteria
     # ======================
     st.subheader("⚖️ Bobot Kriteria")
-    weights = {
-        "Kepemimpinan": 0.30,
-        "Komunikasi": 0.20,
-        "Kerjasama": 0.15,
-        "Sikap Profesional": 0.15,
-        "Arah & Pengambilan Keputusan": 0.20
-    }
+
+    bobot_list = [0.30, 0.20, 0.15, 0.15, 0.20]
 
     bobot_df = pd.DataFrame({
-        "Kriteria": weights.keys(),
-        "Bobot": weights.values()
+        "Kriteria": kriteria,
+        "Bobot": bobot_list
     })
     st.table(bobot_df)
+
+    if round(sum(bobot_list), 2) != 1:
+        st.error("❌ Total bobot harus = 1")
+        st.stop()
 
     # ======================
     # Normalisasi SAW
     # ======================
     st.subheader("🔢 Normalisasi SAW")
+
     norm_df = df.copy()
-
     for c in kriteria:
-        norm_df[c] = df[c] / df[c].max()
+        max_val = df[c].max()
+        norm_df[c] = df[c] / max_val if max_val != 0 else 0
 
-    st.dataframe(norm_df)
+    st.dataframe(norm_df, use_container_width=True)
 
     # ======================
     # Nilai Preferensi SAW
     # ======================
     st.subheader("⭐ Nilai Preferensi SAW")
+
     pref_values = []
 
     for i in range(len(df)):
         total = 0
-        for c in kriteria:
-            total += norm_df.loc[i, c] * weights[c]
+        for j, c in enumerate(kriteria):
+            total += norm_df.loc[i, c] * bobot_list[j]
         pref_values.append(total)
 
-    result_df = pd.DataFrame({
+    saw_df = pd.DataFrame({
         "Atasan": alternatif,
-        "Nilai Preferensi": pref_values
-    }).sort_values(by="Nilai Preferensi", ascending=False)
+        "Nilai Preferensi SAW": pref_values
+    }).sort_values(
+        by="Nilai Preferensi SAW",
+        ascending=False
+    ).reset_index(drop=True)
 
-    st.dataframe(result_df)
+    st.dataframe(saw_df, use_container_width=True)
 
     # ======================
     # Copeland Score
     # ======================
     st.subheader("⚔️ Copeland Score")
-    scores = result_df["Nilai Preferensi"].values
-    names = result_df["Atasan"].values
 
-    wins = {name: 0 for name in names}
-    losses = {name: 0 for name in names}
+    scores = saw_df["Nilai Preferensi SAW"].values
+    names = saw_df["Atasan"].values
+
+    wins = {n: 0 for n in names}
+    losses = {n: 0 for n in names}
 
     for i in range(len(scores)):
         for j in range(len(scores)):
@@ -97,16 +124,15 @@ if uploaded_file:
         "Menang": [wins[n] for n in names],
         "Kalah": [losses[n] for n in names],
         "Copeland Score": [wins[n] - losses[n] for n in names]
-    }).sort_values(by="Copeland Score", ascending=False)
+    }).sort_values(
+        by="Copeland Score",
+        ascending=False
+    ).reset_index(drop=True)
 
-    st.dataframe(copeland_df)
+    st.dataframe(copeland_df, use_container_width=True)
 
-    # ======================
-    # Grafik Ranking
-    # ======================
     st.subheader("📈 Grafik Ranking Copeland Score")
     st.bar_chart(copeland_df.set_index("Atasan")["Copeland Score"])
 
 else:
-    st.info("Silakan upload file CSV untuk memulai.")
-
+    st.info("⬆️ Silakan upload file CSV untuk memulai.")
